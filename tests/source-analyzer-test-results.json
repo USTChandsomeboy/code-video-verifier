@@ -1,0 +1,48 @@
+{
+  "tests": [
+    {
+      "name": "local import aliases, default props, spread props, array.map and Sequence-local frame",
+      "passed": true
+    },
+    {
+      "name": "nested Sequence offsets accumulate while frame is local",
+      "passed": true
+    },
+    {
+      "name": "Math helpers, conditional branches, template strings and symbolic spring",
+      "passed": true
+    },
+    {
+      "name": "unknown attributes and branches remain explicit and do not erase known siblings",
+      "passed": true
+    },
+    {
+      "name": "top-level effects, external imports, Function and I/O are never executed",
+      "passed": true
+    },
+    {
+      "name": "missing/outside imports cannot resolve arbitrary files",
+      "passed": true
+    },
+    {
+      "name": "bounded interpreted for loops and Array.from callbacks",
+      "passed": true
+    },
+    {
+      "name": "recursive submitted AST is bounded and reported as unknown",
+      "passed": true
+    },
+    {
+      "name": "unknown spread invalidates overwritten/missing properties without invalidating later explicit properties",
+      "passed": true
+    },
+    {
+      "name": "unknown array arguments and symbolic predicates never coerce to concrete passing values",
+      "passed": true
+    }
+  ],
+  "passed": 10,
+  "total": 10,
+  "node": "v20.11.1",
+  "typescript": "5.7.2"
+}

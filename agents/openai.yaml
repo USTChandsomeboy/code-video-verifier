@@ -1,0 +1,4 @@
+interface:
+  display_name: "Code + Video Verifier 生成器"
+  short_description: "从原作源码和视频生成双份源码自动评分器及隐藏评估清单"
+  default_prompt: "使用 $code-video-verifier，根据原作源码和视频生成比较原作与复刻源码的自动评分脚本、隐藏检查清单和验证记录。"

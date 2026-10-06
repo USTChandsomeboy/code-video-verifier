@@ -1,0 +1,645 @@
+{
+  "version": 2,
+  "source": "round10-deep-code-review.json",
+  "templates": [
+    {
+      "id": "W01",
+      "name": "渐显、逐字或遮罩揭示被瞬时显示替代",
+      "applies_when": "原作对象在一段时间内逐渐可见",
+      "measurement": "对象的透明度、裁剪参数或文本长度随时间变化",
+      "limits": "分别定位目标对象及有效祖先上的属性",
+      "validation_cases": "去除中间出现过程；整体延迟",
+      "origin": "round10 code/video review: observed case evidence",
+      "evidence": [
+        {
+          "case_id": "r10-14",
+          "title": "Magnific 品牌发布片（作者重建版）",
+          "finding": {
+            "aspect": "字标横向揭示被整体淡入替代",
+            "original": "原片扩大文字容器宽度，并让图标和文字随宽度变化重新居中。",
+            "replica": "复刻整段文字同时淡入，宽度不随揭示进度变化。"
+          },
+          "code_evidence": [
+            {
+              "file": "source-catalog/round10/naveen-annam--creativly.ai-magnific-video-remotion/src/scenes/Scene07_MagnificLockup.tsx",
+              "line": 53,
+              "anchor": "const wordWidth",
+              "url": "https://github.com/naveen-annam/creativly.ai-magnific-video-remotion/blob/f0ce11dddacf14a306c0c1f122dd06509e1873f8/src/scenes/Scene07_MagnificLockup.tsx#L53"
+            },
+            {
+              "file": "experiments/r10-14/src/Replica.tsx",
+              "line": 5,
+              "anchor": "opacity: clamp((t - 29)",
+              "url": "/experiments/r10-14/src/Replica.tsx"
+            }
+          ]
+        },
+        {
+          "case_id": "r10-18",
+          "title": "Echook 声音通知产品片",
+          "finding": {
+            "aspect": "命令没有逐字输入",
+            "original": "原片每条命令有独立开始时间及打字速度。",
+            "replica": "复刻按几个时间阈值直接显示整行。"
+          },
+          "code_evidence": [
+            {
+              "file": "source-catalog/round10/ChanMeng666--echook-promo-video/src/sections/features/QuickSetup.tsx",
+              "line": 77,
+              "anchor": "startFrame={5}",
+              "url": "https://github.com/ChanMeng666/echook-promo-video/blob/a2b8004ce7ca4e30a94cdb867b732537f374f481/src/sections/features/QuickSetup.tsx#L77"
+            },
+            {
+              "file": "experiments/r10-18/src/Replica.tsx",
+              "line": 2,
+              "anchor": "t > 21.3",
+              "url": "/experiments/r10-18/src/Replica.tsx"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "W02",
+      "name": "连续运动被静态状态或突跳替代",
+      "applies_when": "有连续位移、缩放或镜头运动",
+      "measurement": "对象的位移、缩放或相机属性随时间变化",
+      "limits": "采样覆盖中间过程与边界，符号表达式另列支持范围",
+      "validation_cases": "中间轨迹冻结；周期重置",
+      "origin": "round10 code/video review: observed case evidence",
+      "evidence": [
+        {
+          "case_id": "r10-01",
+          "title": "Sulcus 品牌片：从混乱到秩序",
+          "finding": {
+            "aspect": "镜头连续运动被阶段跳变替代",
+            "original": "原片使用连续相机路径投影场景。",
+            "replica": "主要使用二维平移、固定倾斜和阶段切换；不是同一路径。"
+          },
+          "code_evidence": [
+            {
+              "file": "source-catalog/round10/ElarizT--Sulcus-Brand-Film/src/film/camera.ts",
+              "line": 100,
+              "anchor": "const spline",
+              "url": "https://github.com/ElarizT/Sulcus-Brand-Film/blob/f8c3c40be65e3ad3276fe8eb922f533d7eef96fe/src/film/camera.ts#L100"
+            },
+            {
+              "file": "experiments/r10-01/src/Replica.tsx",
+              "line": 6,
+              "anchor": "phase",
+              "url": "/experiments/r10-01/src/Replica.tsx"
+            }
+          ]
+        },
+        {
+          "case_id": "r10-14",
+          "title": "Magnific 品牌发布片（作者重建版）",
+          "finding": {
+            "aspect": "标志缩小时有一次明显尺寸跳变",
+            "original": "原片标志从大到小连续缩放，再略微回弹。",
+            "replica": "复刻先缩至 440×0.04=17.6 像素，27.5 秒时直接改为 40 像素。"
+          },
+          "code_evidence": [
+            {
+              "file": "source-catalog/round10/naveen-annam--creativly.ai-magnific-video-remotion/src/scenes/Scene06_Transforms.tsx",
+              "line": 272,
+              "anchor": "const finalScale",
+              "url": "https://github.com/naveen-annam/creativly.ai-magnific-video-remotion/blob/f0ce11dddacf14a306c0c1f122dd06509e1873f8/src/scenes/Scene06_Transforms.tsx#L272"
+            },
+            {
+              "file": "experiments/r10-14/src/Replica.tsx",
+              "line": 5,
+              "anchor": "440 * p",
+              "url": "/experiments/r10-14/src/Replica.tsx"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "W03",
+      "name": "对象跨状态失去对应关系",
+      "applies_when": "同一批可区分对象重排、换状态",
+      "measurement": "对象内容、key、数据来源和跨状态映射",
+      "limits": "对无法区分的对象允许等价交换",
+      "validation_cases": "重排时交换可区分对象；首尾正确但中间断裂",
+      "origin": "round10 code/video review: observed case evidence",
+      "evidence": [
+        {
+          "case_id": "r10-01",
+          "title": "Sulcus 品牌片：从混乱到秩序",
+          "finding": {
+            "aspect": "节点没有从散乱状态持续整理成树",
+            "original": "原片为节点保留身份、父子关系，并根据各节点 acquire 时间逐步重排。",
+            "replica": "开头散点与后续七组 Graph 分开生成；不是同一批节点逐个归位。"
+          },
+          "code_evidence": [
+            {
+              "file": "source-catalog/round10/ElarizT--Sulcus-Brand-Film/src/world/field.ts",
+              "line": 481,
+              "anchor": "v3.lerp(n.chaos, n.tree, m)",
+              "url": "https://github.com/ElarizT/Sulcus-Brand-Film/blob/f8c3c40be65e3ad3276fe8eb922f533d7eef96fe/src/world/field.ts#L481"
+            },
+            {
+              "file": "experiments/r10-01/src/Replica.tsx",
+              "line": 6,
+              "anchor": "length:95",
+              "url": "/experiments/r10-01/src/Replica.tsx"
+            }
+          ]
+        },
+        {
+          "case_id": "r10-08",
+          "title": "推荐算法与信息茧房",
+          "finding": {
+            "aspect": "同样数量的科技卡片，却不是同一批卡片",
+            "original": "原片按固定 pickOrder 选择要替换的卡片。",
+            "replica": "复刻每波拿当前非科技卡片的前几个。"
+          },
+          "code_evidence": [
+            {
+              "file": "source-catalog/round10/znyupup--knowledge-explainer-skill/custom/AlgorithmBubble.jsx",
+              "line": 72,
+              "anchor": "pickOrder",
+              "url": "https://github.com/znyupup/knowledge-explainer-skill/blob/6ecae15fc8bbb589196c32ff3b726fc3e1764eac/custom/AlgorithmBubble.jsx#L72"
+            },
+            {
+              "file": "experiments/r10-08/src/Replica.tsx",
+              "line": 3,
+              "anchor": "others.slice",
+              "url": "/experiments/r10-08/src/Replica.tsx"
+            }
+          ]
+        },
+        {
+          "case_id": "r10-11",
+          "title": "Remotion Lambda 云渲染介绍",
+          "finding": {
+            "aspect": "数字变 React 图形时对象没有延续",
+            "original": "原片将数字粒子交给 ToReactStarry 完成后续变化。",
+            "replica": "复刻另生成 1100 个围绕三条椭圆运动的点。"
+          },
+          "code_evidence": [
+            {
+              "file": "source-catalog/round10/remotion-dev--trailer-lambda/src/StarryNumbers.tsx",
+              "line": 105,
+              "anchor": "<ToReactStarry",
+              "url": "https://github.com/remotion-dev/trailer-lambda/blob/296642c671363d3187708c646a21bafde4fd51b5/src/StarryNumbers.tsx#L105"
+            },
+            {
+              "file": "experiments/r10-11/src/Replica.tsx",
+              "line": 4,
+              "anchor": "length: 1100",
+              "url": "/experiments/r10-11/src/Replica.tsx"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "W04",
+      "name": "中间状态或操作反馈缺失",
+      "applies_when": "等待、执行、失败、成功或点击反馈序列",
+      "measurement": "状态条件、属性依赖与对象之间的绑定关系",
+      "limits": "从组件入口追踪可达分支和参数传递",
+      "validation_cases": "跳过running；成功先于点击",
+      "origin": "round10 code/video review: observed case evidence",
+      "evidence": [
+        {
+          "case_id": "r10-01",
+          "title": "Sulcus 品牌片：从混乱到秩序",
+          "finding": {
+            "aspect": "重试过程丢了多个状态",
+            "original": "原片依次展示运行、第一次失败、第二次重试、最终成功。",
+            "replica": "提示只在一个时间条件后变成 503 retry 2/3，没有完整成功状态。"
+          },
+          "code_evidence": [
+            {
+              "file": "source-catalog/round10/ElarizT--Sulcus-Brand-Film/src/world/drawGovernance.ts",
+              "line": 299,
+              "anchor": "503",
+              "url": "https://github.com/ElarizT/Sulcus-Brand-Film/blob/f8c3c40be65e3ad3276fe8eb922f533d7eef96fe/src/world/drawGovernance.ts#L299"
+            },
+            {
+              "file": "experiments/r10-01/src/Replica.tsx",
+              "line": 6,
+              "anchor": "503",
+              "url": "/experiments/r10-01/src/Replica.tsx"
+            }
+          ]
+        },
+        {
+          "case_id": "r10-02",
+          "title": "Ringflow 环形菜单操作演示",
+          "finding": {
+            "aspect": "宏步骤一出现就已经完成",
+            "original": "原片按时间推进各步骤的执行状态。",
+            "replica": "四行以透明度先后出现，但每行固定写着“完成”。"
+          },
+          "code_evidence": [
+            {
+              "file": "source-catalog/round10/wawaup--Ringflow-promo/src/components/ProductUI/ProductSurfaces.tsx",
+              "line": 903,
+              "anchor": "MacroExecution",
+              "url": "https://github.com/wawaup/Ringflow-promo/blob/f85e52149ac88679ee82d4a97a7ee81e1875a3c6/src/components/ProductUI/ProductSurfaces.tsx#L903"
+            },
+            {
+              "file": "experiments/r10-02/src/Replica.tsx",
+              "line": 5,
+              "anchor": "完成",
+              "url": "/experiments/r10-02/src/Replica.tsx"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "W05",
+      "name": "转场被硬切或错误效果替代",
+      "applies_when": "相邻场景有重叠、遮罩、翻面或连续变形",
+      "measurement": "对象层级、裁剪参数与转场作用范围",
+      "limits": "容器属性与子元素属性分开追踪",
+      "validation_cases": "删中间转场；保留长度但错误运动方向",
+      "origin": "round10 code/video review: observed case evidence",
+      "evidence": [
+        {
+          "case_id": "r10-03",
+          "title": "GitHub Unwrapped 2022",
+          "finding": {
+            "aspect": "场景交接被直接切换替代",
+            "original": "原片在场景交接的 15 帧里，旧场景滑出、新场景滑入。",
+            "replica": "复刻用互斥时间分支切换。"
+          },
+          "code_evidence": [
+            {
+              "file": "source-catalog/round10/remotion-dev--github-unwrapped-2022/remotion/SlideIn.tsx",
+              "line": 10,
+              "anchor": "transitionDuration = 15",
+              "url": "https://github.com/remotion-dev/github-unwrapped-2022/blob/1297352b814d631fbc9d6338f30cbb55c7d967fd/remotion/SlideIn.tsx#L10"
+            },
+            {
+              "file": "experiments/r10-03/src/Replica.tsx",
+              "line": 10,
+              "anchor": "t < 5",
+              "url": "/experiments/r10-03/src/Replica.tsx"
+            }
+          ]
+        },
+        {
+          "case_id": "r10-04",
+          "title": "Remotion Transitions 发布片",
+          "finding": {
+            "aspect": "文字裁切在实际渲染中失效",
+            "original": "原片在第 279 帧仍显示 NA 字形。",
+            "replica": "复刻代码意图用 backgroundClip:text 裁切，但交付视频第 279 帧显示整块矩形渐变。"
+          },
+          "code_evidence": [
+            {
+              "file": "source-catalog/round10/remotion-dev--transitions-video/src/TextMask.tsx",
+              "line": 37,
+              "anchor": "WebkitMaskImage",
+              "url": "https://github.com/remotion-dev/transitions-video/blob/8d4b188b42976f7dbdf536c681ce2b3e5e5e1669/src/TextMask.tsx#L37"
+            },
+            {
+              "file": "experiments/r10-04/src/Replica.tsx",
+              "line": 5,
+              "anchor": "backgroundClip",
+              "url": "/experiments/r10-04/src/Replica.tsx"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "W06",
+      "name": "错峰、跟随、复合动作绑定错误",
+      "applies_when": "多对象独立启动或同一对象多属性联动",
+      "measurement": "各对象属性变化起点及相对时间间隔",
+      "limits": "统一Sequence局部时间与全局时间",
+      "validation_cases": "错峰同步；把动作加到背景；漏掉缩放",
+      "origin": "round10 code/video review: observed case evidence",
+      "evidence": [
+        {
+          "case_id": "r10-19",
+          "title": "三角形面积讲解",
+          "finding": {
+            "aspect": "高度虚线和标签被合成一个动作",
+            "original": "原片先出现高的虚线，再延后 15 帧出现“高 6 cm”。",
+            "replica": "复刻把虚线与标签放在同一个透明度组里。"
+          },
+          "code_evidence": [
+            {
+              "file": "source-catalog/round10/znyupup--knowledge-explainer-skill/templates/Triangle.jsx",
+              "line": 35,
+              "anchor": "[95, 115]",
+              "url": "https://github.com/znyupup/knowledge-explainer-skill/blob/6ecae15fc8bbb589196c32ff3b726fc3e1764eac/templates/Triangle.jsx#L35"
+            },
+            {
+              "file": "experiments/r10-19/src/Replica.tsx",
+              "line": 3,
+              "anchor": "(t - 11.7)",
+              "url": "/experiments/r10-19/src/Replica.tsx"
+            }
+          ]
+        },
+        {
+          "case_id": "r10-17",
+          "title": "Remotion 首发宣传片",
+          "finding": {
+            "aspect": "React 图形的描边和文字进入动作简化",
+            "original": "原片三条弧各延迟 0、30、60 帧，描边变细；文字分两行向上进入，整体缩放。",
+            "replica": "复刻三条椭圆统一按 q×14 旋转，另用虚线长度显示轮廓。"
+          },
+          "code_evidence": [
+            {
+              "file": "source-catalog/round10/remotion-dev--trailer/src/Intro/Arc.tsx",
+              "line": 27,
+              "anchor": "const strokeWidth",
+              "url": "https://github.com/remotion-dev/trailer/blob/63c2a66f2c7780f64c85c26e5f872daa31d9545c/src/Intro/Arc.tsx#L27"
+            },
+            {
+              "file": "experiments/r10-17/src/Replica.tsx",
+              "line": 6,
+              "anchor": "q * 14",
+              "url": "/experiments/r10-17/src/Replica.tsx"
+            }
+          ]
+        },
+        {
+          "case_id": "r10-20",
+          "title": "AI 剪辑的三个步骤",
+          "finding": {
+            "aspect": "左右两列出现次序被压缩",
+            "original": "原片左列从 0.667 秒、右列从 1.667 秒开始，逐项间隔约 0.267 秒。",
+            "replica": "复刻左列 0.7 秒、右列 1.25 秒开始，逐项间隔 0.4 秒。"
+          },
+          "code_evidence": [
+            {
+              "file": "source-catalog/round10/znyupup--knowledge-explainer-skill/templates/TwoColumn.jsx",
+              "line": 67,
+              "anchor": "delay={50}",
+              "url": "https://github.com/znyupup/knowledge-explainer-skill/blob/6ecae15fc8bbb589196c32ff3b726fc3e1764eac/templates/TwoColumn.jsx#L67"
+            },
+            {
+              "file": "experiments/r10-20/src/Replica.tsx",
+              "line": 4,
+              "anchor": "j * .55",
+              "url": "/experiments/r10-20/src/Replica.tsx"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "W07",
+      "name": "数值与图形、状态不同步",
+      "applies_when": "数字和图形共用数据变化或阈值",
+      "measurement": "数值、几何参数、排序结果与来源表达式",
+      "limits": "核对同一时刻数据到对象属性的映射",
+      "validation_cases": "数字变化而图形静止；比例错；阈值永远不到",
+      "origin": "round10 code/video review: observed case evidence",
+      "evidence": [
+        {
+          "case_id": "r10-09",
+          "title": "Morph 数据库迁移产品片",
+          "finding": {
+            "aspect": "复杂度仪表有一个特殊值错误",
+            "original": "原片复杂度数字和圆弧按同一 0→62 的比例变化。",
+            "replica": "复刻 Gauge 将任何 num=12 都当成仪表盘总数，改画约 90% 圆弧并写 TOTAL。"
+          },
+          "code_evidence": [
+            {
+              "file": "source-catalog/round10/AleBrito124356--morph-promo/src/scenes-app.tsx",
+              "line": 121,
+              "anchor": "[0, 62]",
+              "url": "https://github.com/AleBrito124356/morph-promo/blob/3e284ded02002892d3eb0198998cee33861365bc/src/scenes-app.tsx#L121"
+            },
+            {
+              "file": "experiments/r10-09/src/Replica.tsx",
+              "line": 5,
+              "anchor": "num === 12 ? 254",
+              "url": "/experiments/r10-09/src/Replica.tsx"
+            }
+          ]
+        },
+        {
+          "case_id": "r10-15",
+          "title": "GitHub Unwrapped 2021",
+          "finding": {
+            "aspect": "饼图颜色占比与数字下降分开控制",
+            "original": "原片同一 spr 同时驱动数字减少、两色扇形比例和文案切换。",
+            "replica": "复刻数字以每秒 150 下降，扇形另用角速度变化，21.3 秒后固定为 55°。"
+          },
+          "code_evidence": [
+            {
+              "file": "source-catalog/round10/remotion-dev--github-unwrapped-2021/remotion/Issues.tsx",
+              "line": 51,
+              "anchor": "const openRatio",
+              "url": "https://github.com/remotion-dev/github-unwrapped-2021/blob/94c470c049aef2f6b24dd8dbf2168ae2ee7dd80a/remotion/Issues.tsx#L51"
+            },
+            {
+              "file": "experiments/r10-15/src/Replica.tsx",
+              "line": 4,
+              "anchor": "t >= 21.3",
+              "url": "/experiments/r10-15/src/Replica.tsx"
+            }
+          ]
+        },
+        {
+          "case_id": "r10-07",
+          "title": "全球品牌价值动态排名",
+          "finding": {
+            "aspect": "原片数值公式本身有问题",
+            "original": "原片条形宽度朝 next 值变化，文字数值却使用 prev+(prev−next)×progress。",
+            "replica": "复刻使用通常的 prev+(next−prev)×progress。"
+          },
+          "code_evidence": [
+            {
+              "file": "source-catalog/round10/hylarucoder--remotion-bar-race-chart/remotion/charts/BarRace.tsx",
+              "line": 96,
+              "anchor": "prevItem.value - nextItem.value",
+              "url": "https://github.com/hylarucoder/remotion-bar-race-chart/blob/d9483a9fd57f763c312cd2f6cdbf7a7a71e7152f/remotion/charts/BarRace.tsx#L96"
+            },
+            {
+              "file": "experiments/r10-07/src/Replica.tsx",
+              "line": 26,
+              "anchor": "rows[b][i] - v",
+              "url": "/experiments/r10-07/src/Replica.tsx"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "W08",
+      "name": "裁剪、运镜时素材内容变形或替换",
+      "applies_when": "图片或波形在裁剪、缩放中保持内容",
+      "measurement": "素材引用、资源指纹、裁剪与缩放参数",
+      "limits": "素材内容与作用于素材的动作分别检查",
+      "validation_cases": "裁剪改成压缩；照片替换成重复图形",
+      "origin": "round10 code/video review: observed case evidence",
+      "evidence": [
+        {
+          "case_id": "r10-16",
+          "title": "Remotion 2.0 音频时间线演示",
+          "finding": {
+            "aspect": "裁剪波形时把波形压缩了",
+            "original": "原片独立控制音频块裁剪宽度、内部波形偏移。",
+            "replica": "复刻每次都按新宽度 w 重排 130 根波形线。"
+          },
+          "code_evidence": [
+            {
+              "file": "source-catalog/round10/remotion-dev--trailer-2-0/src/AudioTag.tsx",
+              "line": 62,
+              "anchor": "marginLeft: -trimLeft",
+              "url": "https://github.com/remotion-dev/trailer-2-0/blob/5afaa6119bf07d92eac07cfa5d131969a2d569b7/src/AudioTag.tsx#L62"
+            },
+            {
+              "file": "experiments/r10-16/src/Replica.tsx",
+              "line": 2,
+              "anchor": "i * w / 130",
+              "url": "/experiments/r10-16/src/Replica.tsx"
+            }
+          ]
+        },
+        {
+          "case_id": "r10-10",
+          "title": "Higgsfield 工作流（作者重建版）",
+          "finding": {
+            "aspect": "人物与商品图片被统一简笔图替代",
+            "original": "原片使用人物、产品照片素材。",
+            "replica": "复刻用同一套 SVG 人形和包装图按取模改色。"
+          },
+          "code_evidence": [
+            {
+              "file": "source-catalog/round10/naveen-annam--creativly.ai-higgsfield-video-remotion/src/scenes/Scene02_Seg001.tsx",
+              "line": 368,
+              "anchor": "<Img",
+              "url": "https://github.com/naveen-annam/creativly.ai-higgsfield-video-remotion/blob/409a4893c5b597ae456eb54f31994e5e9fe32d98/src/scenes/Scene02_Seg001.tsx#L368"
+            },
+            {
+              "file": "experiments/r10-10/src/Replica.tsx",
+              "line": 3,
+              "anchor": "function Art",
+              "url": "/experiments/r10-10/src/Replica.tsx"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "W09",
+      "name": "文字、数字、单位、命令内容错误",
+      "applies_when": "包含应准确复刻的可读内容",
+      "measurement": "实际JSX中的文字、数字、单位和命令",
+      "limits": "通过组件和props展开获取可达文本，记录未知表达式",
+      "validation_cases": "近似拼写；单位错误；命令参数替换",
+      "origin": "round10 code/video review: observed case evidence",
+      "evidence": [
+        {
+          "case_id": "r10-18",
+          "title": "Echook 声音通知产品片",
+          "finding": {
+            "aspect": "安装命令抄错",
+            "original": "原片仓库为 ChanMeng666/echook，插件名 audio-hooks@chanmeng-audio-hooks。",
+            "replica": "复刻改成 Channing666/echook 和 audio-hooks@channing-as。"
+          },
+          "code_evidence": [
+            {
+              "file": "source-catalog/round10/ChanMeng666--echook-promo-video/src/sections/features/QuickSetup.tsx",
+              "line": 76,
+              "anchor": "ChanMeng666/echook",
+              "url": "https://github.com/ChanMeng666/echook-promo-video/blob/a2b8004ce7ca4e30a94cdb867b732537f374f481/src/sections/features/QuickSetup.tsx#L76"
+            },
+            {
+              "file": "experiments/r10-18/src/Replica.tsx",
+              "line": 2,
+              "anchor": "Channing666/echook",
+              "url": "/experiments/r10-18/src/Replica.tsx"
+            }
+          ]
+        },
+        {
+          "case_id": "r10-12",
+          "title": "折纸 42 次有多厚",
+          "finding": {
+            "aspect": "地标名称和距离抄错",
+            "original": "原片写“迪拜塔”和“超过月球 44万km”。",
+            "replica": "复刻写“沃昇塔”和“超过月球 447km”。"
+          },
+          "code_evidence": [
+            {
+              "file": "source-catalog/round10/znyupup--knowledge-explainer-skill/custom/PaperFold.jsx",
+              "line": 23,
+              "anchor": "超过月球 44万km",
+              "url": "https://github.com/znyupup/knowledge-explainer-skill/blob/6ecae15fc8bbb589196c32ff3b726fc3e1764eac/custom/PaperFold.jsx#L23"
+            },
+            {
+              "file": "experiments/r10-12/src/Replica.tsx",
+              "line": 2,
+              "anchor": "超过月球 447km",
+              "url": "/experiments/r10-12/src/Replica.tsx"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "W10",
+      "name": "路径、缓动、回弹和时长不准",
+      "applies_when": "路径/回弹/描边/物理动画可观测",
+      "measurement": "路径、插值曲线、起止时间与函数参数",
+      "limits": "比较已支持函数的行为；复杂曲线列出支持范围",
+      "validation_cases": "整体延迟；方向反转；去回弹；持续时间缩短",
+      "origin": "round10 code/video review: observed case evidence",
+      "evidence": [
+        {
+          "case_id": "r10-19",
+          "title": "三角形面积讲解",
+          "finding": {
+            "aspect": "三角形描边起止时间和速度不同",
+            "original": "原片 9.733–12 秒线性描边。",
+            "replica": "复刻 10–11.25 秒使用 cubic ease-out 描边。"
+          },
+          "code_evidence": [
+            {
+              "file": "source-catalog/round10/znyupup--knowledge-explainer-skill/templates/Triangle.jsx",
+              "line": 30,
+              "anchor": "[22, 90]",
+              "url": "https://github.com/znyupup/knowledge-explainer-skill/blob/6ecae15fc8bbb589196c32ff3b726fc3e1764eac/templates/Triangle.jsx#L30"
+            },
+            {
+              "file": "experiments/r10-19/src/Replica.tsx",
+              "line": 3,
+              "anchor": "(t - 10) * .8",
+              "url": "/experiments/r10-19/src/Replica.tsx"
+            }
+          ]
+        },
+        {
+          "case_id": "r10-02",
+          "title": "Ringflow 环形菜单操作演示",
+          "finding": {
+            "aspect": "场景切换有多处时间偏移",
+            "original": "原片场景起点为 0、4.8、7.6、13.6、17.8、21、24.2、27.4 秒。",
+            "replica": "复刻起点为 0、4、8、13、18、22、24、27 秒。"
+          },
+          "code_evidence": [
+            {
+              "file": "source-catalog/round10/wawaup--Ringflow-promo/src/config/timeline.ts",
+              "line": 73,
+              "anchor": "durationSeconds: 4.8",
+              "url": "https://github.com/wawaup/Ringflow-promo/blob/f85e52149ac88679ee82d4a97a7ee81e1875a3c6/src/config/timeline.ts#L73"
+            },
+            {
+              "file": "experiments/r10-02/src/Replica.tsx",
+              "line": 6,
+              "anchor": "t<4",
+              "url": "/experiments/r10-02/src/Replica.tsx"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
