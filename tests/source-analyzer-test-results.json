@@ -39,10 +39,26 @@
     {
       "name": "unknown array arguments and symbolic predicates never coerce to concrete passing values",
       "passed": true
+    },
+    {
+      "name": "wrapper children render with Sequence-local hooks while parent expressions retain parent frame",
+      "passed": true
+    },
+    {
+      "name": "JSX passed through an arbitrary prop receives the eventual render context",
+      "passed": true
+    },
+    {
+      "name": "unknown interpolate options and symbolic conversions cannot manufacture concrete motion",
+      "passed": true
+    },
+    {
+      "name": "unknown computed keys invalidate earlier properties and missing-key defaults",
+      "passed": true
     }
   ],
-  "passed": 10,
-  "total": 10,
+  "passed": 14,
+  "total": 14,
   "node": "v20.11.1",
   "typescript": "5.7.2"
 }

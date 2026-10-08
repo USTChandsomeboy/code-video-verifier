@@ -35,5 +35,28 @@ put('unknown-spread.tsx',`export const Main=()=>{const u=missing();const before=
 test('unknown spread invalidates overwritten/missing properties without invalidating later explicit properties',()=>{const r=run('unknown-spread.tsx');const d=r.frames[0].tree[0];assert.ok(d.attrs.a.$unknown);assert.equal(d.attrs.b,.5);assert.ok(d.attrs.c.$unknown);assert.ok(d.attrs.d.$unknown);assert.ok(d.children[0].attrs.opacity.$unknown);assert.equal(d.children[1].attrs.opacity,.7);});
 put('unknown-array.tsx',`import {spring} from 'remotion';export const Main=()=>{const x=missing();const a=[1,2,3].slice(x);const b=[1].includes(x);const c=[1,2].filter(()=>spring({frame:1,fps:30}));return <div a={a} b={b} c={c}/>}`);
 test('unknown array arguments and symbolic predicates never coerce to concrete passing values',()=>{const r=run('unknown-array.tsx');const attrs=r.frames[0].tree[0].attrs;assert.ok(attrs.a.$unknown);assert.ok(attrs.b.$unknown);assert.ok(attrs.c.$unknown);});
+put('wrapped-sequence.tsx',`import {Sequence as Seq,useCurrentFrame as frame} from 'remotion';
+const Clip=({children})=><Seq from={30}>{children}</Seq>;
+const Child=({parentFrame})=><span local={frame()} parent={parentFrame}/>;
+export const Main=()=>{const f=frame();return <Clip><Child parentFrame={f}/></Clip>};`);
+test('wrapper children render with Sequence-local hooks while parent expressions retain parent frame',()=>{
+ const r=run('wrapped-sequence.tsx',[0,1.5]);assert.equal(r.unsupported_count,0);
+ assert.equal(walk(r.frames[0].tree).some(n=>n.tag==='span'),false);
+ const span=walk(r.frames[1].tree).find(n=>n.tag==='span');assert.equal(span.attrs.local,15);assert.equal(span.attrs.parent,45);assert.equal(span.time.sequence_offset,30);
+});
+put('element-props.tsx',`import {Sequence,useCurrentFrame} from 'remotion';
+const Child=()=> <i frame={useCurrentFrame()}/>;const Holder=({content})=> <Sequence from={15}>{content}</Sequence>;
+export const Main=()=> <Holder content={<Child/>}/>;`);
+test('JSX passed through an arbitrary prop receives the eventual render context',()=>{
+ const r=run('element-props.tsx',[1]);assert.equal(r.unsupported_count,0);assert.equal(walk(r.frames[0].tree).find(n=>n.tag==='i').attrs.frame,15);
+});
+put('unknown-interpolation.tsx',`import {interpolate,spring} from 'remotion';export const Main=()=>{const u=missing();const p=spring({frame:15,fps:30});return <div a={interpolate(15,[0,30],[0,1],u)} b={interpolate(15,[0,30],[0,1],{easing:u})} c={Number(p)} d={Boolean(p)} e={Array.isArray(u)} f={interpolate(p,[0,1],[0,1])}/>}`);
+test('unknown interpolate options and symbolic conversions cannot manufacture concrete motion',()=>{
+ const attrs=run('unknown-interpolation.tsx').frames[0].tree[0].attrs;for(const key of ['a','b','c','d','e','f'])assert.ok(attrs[key].$unknown,key);
+});
+put('unknown-computed.tsx',`export const Main=()=>{const k=missing();const a={opacity:.5,[k]:0};const b={[k]:0,opacity:.5};return <div a={a.opacity} b={b.opacity} c={b.color??'red'} d={Object.keys(b)}/>}`);
+test('unknown computed keys invalidate earlier properties and missing-key defaults',()=>{
+ const attrs=run('unknown-computed.tsx').frames[0].tree[0].attrs;assert.ok(attrs.a.$unknown);assert.equal(attrs.b,.5);assert.ok(attrs.c.$unknown);assert.ok(attrs.d.$unknown);
+});
 const report={tests,passed:tests.filter(t=>t.passed).length,total:tests.length,node:process.version,typescript:require(process.env.VERIFIER_TYPESCRIPT||'typescript').version};fs.writeFileSync(path.join(__dirname,'source-analyzer-test-results.json'),JSON.stringify(report,null,2)+'\n');
 fs.rmSync(root,{recursive:true,force:true});

@@ -85,6 +85,24 @@ class EngineTests(unittest.TestCase):
             o.append({'id':c['id'],'status':'ok','error':0,'evidence':[{'type':'fixture'}]})
         self.assertEqual(before,50);self.assertEqual(evaluate(r,o)['dimensions']['motion'],50)
 
+    def test_unknown_check_does_not_erase_known_failures(self):
+        r=rubric();o=observations(r)
+        o[0].update(error=1)
+        o[3]={'id':o[3]['id'],'status':'unsupported','reason':'external CSS'}
+        result=evaluate(r,o)
+        self.assertIsNone(result['total'])
+        self.assertEqual(result['dimensions']['presence'],0)
+        self.assertAlmostEqual(result['coverage']['weighted'],.6)
+
+    def test_missing_object_keeps_denominator(self):
+        r=rubric();r['objects'].append('second')
+        for c in list(r['checks']):
+            twin=copy.deepcopy(c);twin.update(id=c['id'].replace('box','second'),object_id='second');r['checks'].append(twin)
+        o=observations(r);o[4].update(status='missing',reason='target deleted')
+        result=evaluate(r,o)
+        self.assertEqual(result['total'],50)
+        self.assertEqual(result['coverage']['resolved'],8)
+
     def test_no_source_execution(self):
         with tempfile.TemporaryDirectory() as t:
             root=Path(t);(root/'src.tsx').write_text('throw new Error("DO NOT RUN");')
@@ -119,6 +137,7 @@ class CliTests(unittest.TestCase):
             (package/'private/reference-data/box.json').write_text('{"changed":true}')
             subprocess.run(args,capture_output=True)
             result=json.loads((root/'result/scores.json').read_text());self.assertFalse(result['integrity_ok'])
+            self.assertEqual(result['status'],'evaluation_error');self.assertIsNone(result['provisional_total'])
             # Changed reference fingerprint is rejected.
             (src/'scores.json').write_text('{"total":999}')
             subprocess.run(args,capture_output=True)

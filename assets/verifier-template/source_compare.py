@@ -56,7 +56,9 @@ def points(n):
     i=0;cmd=None;x=y=0;out=[]
     while i<len(tokens):
         if re.fullmatch('[MLHVZ]',tokens[i]):cmd=tokens[i];i+=1
-        if cmd=='Z':break
+        if cmd=='Z':
+            if i < len(tokens): raise Unsupported('multiple SVG path subpaths are unsupported')
+            break
         try:
             if cmd in {'M','L'}:x,y=float(tokens[i]),float(tokens[i+1]);i+=2
             elif cmd=='H':x=float(tokens[i]);i+=1
@@ -68,6 +70,59 @@ def points(n):
     if len(out)>1 and out[-1]==out[0]:out.pop()
     if len(out)<2:raise Unsupported('empty path')
     return out
+
+def triangle_vertices(n, anc):
+    """Translation/scale invariant local shape, with aspect ratio preserved."""
+    p = points(n)
+    if len(p)>1 and p[-1]==p[0]: p=p[:-1]
+    if len(p)!=3 or len(set(p))!=3:
+        raise Unsupported('triangle geometry requires three distinct vertices')
+    if n.get('tag')=='path' and not str(n.get('attrs',{}).get('d','')).rstrip().endswith('Z'):
+        raise Unsupported('triangle path must be closed')
+    for current in reversed((*anc,n)):
+        if current.get('tag')=='svg': break
+        attrs=current.get('attrs',{});style=attrs.get('style',{})
+        if attrs.get('transform') or (isinstance(style,dict) and style.get('transform')):
+            raise Unsupported('triangle transform chain requires a dedicated geometry adapter')
+    xmin=min(x for x,y in p); ymin=min(y for x,y in p)
+    width=max(x for x,y in p)-xmin
+    if width<=0: raise Unsupported('triangle has zero width')
+    area=abs(sum(p[i][0]*p[(i+1)%3][1]-p[(i+1)%3][0]*p[i][1] for i in range(3)))/2
+    if area<=1e-12: raise Unsupported('triangle is degenerate')
+    return [[(x-xmin)/width,(y-ymin)/width] for x,y in p]
+
+
+def spring_scale_parameters(n, anc):
+    """Read only a direct spring in scale(...), on the object or ancestors."""
+    found=[]
+    for current in (*anc,n):
+        if not element(current): continue
+        attrs=current.get('attrs',{});style=attrs.get('style',{})
+        if unknown(attrs.get('__unknown_spread')) or not isinstance(style,dict) or '$unknown' in style or unknown(style.get('__unknown_spread')):
+            raise Unsupported('unresolved transform style')
+        transform=style.get('transform','')
+        if unknown(transform): raise Unsupported('unresolved scale transform')
+        if isinstance(transform,str):
+            if re.search(r'\bscale(?:X|Y)?\(', transform): found.append({'kind':'static_non_spring'})
+            continue
+        if not isinstance(transform,dict): continue
+        symbolic=transform.get('$symbolic',{})
+        if symbolic.get('kind')!='template':
+            raise Unsupported('spring scale needs a direct template binding')
+        parts=symbolic.get('parts',[])
+        if len(parts)==3 and parts[0]=='scale(' and parts[2]==')' and isinstance(parts[1],dict) and parts[1].get('$symbolic',{}).get('kind')=='spring':
+            found.append(parts[1]['$symbolic'])
+        elif any('scale' in x for x in parts if isinstance(x,str)):
+            raise Unsupported('composed symbolic scale needs a dedicated adapter')
+    if len(found)>1: raise Unsupported('multiple spring scales require composition support')
+    if not found:return {'kind':'non_spring','scale':prop(n,anc,'scale_binding')}
+    if found[0].get('kind')=='static_non_spring': return {'kind':'non_spring','scale':prop(n,anc,'scale_binding')}
+    sp=found[0];fps=num(sp.get('fps'));cfg=sp.get('config',{})
+    result={key:num(cfg.get(key)) for key in ['mass','stiffness','damping']}
+    result.update({key:num(sp.get(key)) for key in ['from','to']})
+    result.update(local_time_seconds=num(sp.get('frame'))/fps,delay_seconds=num(sp.get('delay',0))/fps)
+    result['duration_seconds']=num(sp['durationInFrames'])/fps if 'durationInFrames' in sp else None
+    return result
 
 def accepts(n,s):
     if not element(n):return False
@@ -87,7 +142,30 @@ def accepts(n,s):
         if shape=='triangle' and (len(set(p))!=3 or (n.get('tag')=='path' and not str(a.get('d','')).rstrip().endswith('Z'))):return False
     return True
 
+def selector_uncertain(n, s):
+    """Only unknown identity properties block selection; unrelated colors do not."""
+    if not element(n) or (s.get('tags') and n.get('tag') not in s['tags']):
+        return False
+    attrs = n.get('attrs', {})
+    if unknown(attrs.get('__unknown_spread')):
+        return True
+    if (s.get('text_contains') or s.get('text_any')) and structural_unknown(n):
+        return True
+    fields = []
+    for selector, field in [('stroke', 'stroke'), ('dashed', 'strokeDasharray'), ('no_filter', 'filter')]:
+        if s.get(selector): fields.append(field)
+    if s.get('shape'):
+        fields.extend(['d', 'points', 'x1', 'x2', 'y1', 'y2'])
+    return any(unknown(attrs.get(field)) for field in fields)
+
+
 def select(frame,s):
+    # An unresolved branch can hide the target or a second candidate. A known
+    # candidate alone is therefore not sufficient proof of a unique identity.
+    if structural_unknown(frame['tree']):
+        raise Unsupported('unresolved JSX may contain the target or another matching object')
+    if any(selector_uncertain(n,s) for n,a in walk(frame['tree'])):
+        raise Unsupported('unresolved identity properties may match the target object')
     candidates=[(n,a) for n,a in walk(frame['tree']) if accepts(n,s)]
     if s.get('minimal',True):
         candidates=[(n,a) for n,a in candidates if not any(accepts(child,s) for child,ca in walk(n.get('children',[])))]
@@ -121,6 +199,8 @@ def prop(n,anc,name):
         a=n.get('attrs',{});dash=num(a.get('strokeDasharray'));offset=num(a.get('strokeDashoffset',0))
         if dash<=0:raise Unsupported('invalid stroke dash length')
         return 1-offset/dash
+    if name=='triangle_vertices':return triangle_vertices(n,anc)
+    if name=='spring_scale_parameters':return spring_scale_parameters(n,anc)
     if name=='aspect_ratio':
         p=points(n);w=max(x for x,y in p)-min(x for x,y in p);h=max(y for x,y in p)-min(y for x,y in p)
         if w<=0:raise Unsupported('zero-width shape')
@@ -175,7 +255,18 @@ def analyze(root,code,cfg,times):
 def sampled_object(data,obj):
     anchor=min(data['frames'],key=lambda f:abs(f['time']-obj['anchor_time']))
     selected=select(anchor,obj['selector'])
-    if not selected:return None
+    if not selected:
+        # A delayed conditional mount is a timing error, not an absent object.
+        # Search the fixed sample grid and require one stable source identity.
+        alternatives={}
+        for frame in data['frames']:
+            match=select(frame,obj['selector'])
+            if match:
+                alternatives[ident(*match)]=match
+        if len(alternatives)>1:
+            raise Ambiguous('multiple object identities occur across the sample window')
+        if not alternatives:return None
+        selected=next(iter(alternatives.values()))
     n,anc=selected;key=ident(n,anc)
     track=[]
     for frame in data['frames']:
@@ -201,6 +292,35 @@ def values(obj,check):
 def error(ref,rep,check):
     a=[v for t,v in ref];b=[v for t,v in rep];kind=check['metric']
     if kind=='text_equal':return float(a[-1]!=b[-1])
+    if kind in {'triangle_geometry','spring_parameters'}:
+        if [t for t,v in ref]!=[t for t,v in rep]:raise Unsupported('inconsistent structured sample coverage')
+        if kind=='triangle_geometry':
+            def distance(p,q):
+                candidates=[q[k:]+q[:k] for k in range(3)]+[list(reversed(q))[k:]+list(reversed(q))[:k] for k in range(3)]
+                return min(sum(math.hypot(x-u,y-v) for (x,y),(u,v) in zip(p,other))/3 for other in candidates)
+            return sum(distance(p,q) for p,q in zip(a,b))/len(a)
+        scales=check.get('parameter_scales',{})
+        if not scales or any(num(v)<=0 for v in scales.values()):raise Unsupported('spring check needs positive frozen parameter scales')
+        non_spring=[v['scale'] for v in b if isinstance(v,dict) and v.get('kind')=='non_spring']
+        if non_spring and max(non_spring)-min(non_spring)>.00001:
+            raise Unsupported('dynamic non-spring scale may be behaviorally equivalent')
+        differences=[]
+        for original, replica in zip(a,b):
+            if original is None:raise Unsupported('reference has no supported spring scale binding')
+            if replica is None: raise Unsupported('replica has no supported scale binding')
+            if isinstance(original,dict) and original.get('kind')=='non_spring':
+                raise Unsupported('reference spring check selected a static non-spring binding')
+            if isinstance(replica,dict) and replica.get('kind')=='non_spring':
+                differences.append(check['bad']);continue
+            if isinstance(replica,dict) and replica.get('kind')=='dynamic_non_spring':
+                raise Unsupported('dynamic non-spring scale may be behaviorally equivalent')
+            for key,scale in scales.items():
+                if key not in original or key not in replica:raise Unsupported('unknown spring parameter '+key)
+                x,y=original[key],replica[key]
+                differences.append(0 if x is None and y is None else check['bad'] if x is None or y is None else abs(num(x)-num(y))/num(scale))
+        return max(differences)
+    if kind in {'binding','scale_binding'} and (len(ref)<2 or len(rep)<2):
+        raise Unsupported('binding requires at least two usable time samples')
     if kind=='binding':
         # A varying property must act on the selected element or an effective ancestor.
         def dynamic(vals):return max(vals)-min(vals)>check.get('variation_threshold',.01)
@@ -260,12 +380,15 @@ def measure(reference_code,replica_code,private,rubric,reference_cfg,replica_cfg
                         peer_ref=tracked[('reference',c['peer_object'])];peer_rep=tracked[('replica',c['peer_object'])]
                         if isinstance(peer_ref,Exception):raise peer_ref
                         if isinstance(peer_rep,Exception):raise peer_rep
-                        if peer_ref is None or peer_rep is None:err=c['bad']
+                        if peer_ref is None:raise Unsupported('reference peer object not found; revise case definition')
+                        if peer_rep is None:err=c['bad']
                         else:
                             pr=values(peer_ref,c);pp=values(peer_rep,c)
                             def onset(series):return next((t for t,v in series if v>c.get('onset_threshold',.05)),None)
                             times4=[onset(v) for v in [rv,pv,pr,pp]]
-                            if any(x is None for x in times4):err=c['bad']
+                            if times4[0] is None or times4[2] is None:
+                                raise Unsupported('reference relative onset not covered by sampling')
+                            if times4[1] is None or times4[3] is None:err=c['bad']
                             else:err=abs((times4[2]-times4[0])-(times4[3]-times4[1]))
                             row['relation']={'reference_peer_values':pr,'replica_peer_values':pp,'onset_times':times4}
                     else:err=error(rv,pv,c)

@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 if sys.version_info < (3, 10):
     raise SystemExit("Python >=3.10 required")
-from score_core import evaluate, validate_rubric
+from score_core import evaluate, validate_rubric, number
 from source_index import digest, read_sources
 from package_integrity import package_hashes, contained_file
 
@@ -31,6 +31,9 @@ def run(a):
         validation=json.loads((root/'private/validation.json').read_text())
         fp=root/'private/freeze.json';frozen=json.loads(fp.read_text()) if fp.exists() else {}
         integrity=bool(frozen) and frozen.get('files')==package_hashes(root) and frozen.get('rubric_version')==rubric['version']
+        result['integrity_ok']=integrity
+        if frozen and not integrity:
+            raise ValueError('sealed evaluator files changed; regenerate validation and reseal before scoring')
         verified=validation.get('status')=='verified' and validation.get('rubric_version')==rubric['version'] and integrity
         kinds=set()
         for test in validation.get('tests',[]):
@@ -44,7 +47,13 @@ def run(a):
         for key in ['fps','width','height']:
             value=getattr(a,'replica_'+key)
             if value is not None: replica_cfg[key]=value
-            if not isinstance(replica_cfg.get(key),(int,float)) or replica_cfg[key]<=0: raise ValueError('invalid composition '+key)
+            if not number(replica_cfg.get(key)) or replica_cfg[key]<=0: raise ValueError('invalid composition '+key)
+        for side, composition in [('reference',cfg), ('replica',replica_cfg)]:
+            for key in ['fps','width','height','durationInFrames']:
+                if not number(composition.get(key)) or composition[key]<=0:
+                    raise ValueError('invalid '+side+' composition '+key)
+            if not number(composition.get('time_offset_seconds',0)) or composition.get('time_offset_seconds',0)<0:
+                raise ValueError('invalid '+side+' time offset')
         replica_cfg['props']=json.loads(a.replica_props) if a.replica_props else cfg.get('props',{})
         spec=importlib.util.spec_from_file_location('trusted_case_adapter',root/'case_adapter.py')
         adapter=importlib.util.module_from_spec(spec);spec.loader.exec_module(adapter)

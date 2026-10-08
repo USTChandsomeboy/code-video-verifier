@@ -15,6 +15,9 @@ const dict=()=>Object.create(null);
 const own=(o,k)=>o!=null&&Object.prototype.hasOwnProperty.call(o,k);
 class Fn {constructor(node,env,name){this.node=node;this.env=env;this.name=name||'';}}
 class Builtin {constructor(name){this.name=name;}}
+// JSX construction captures its parent's context; component execution is deferred
+// until the element is rendered, possibly inside a Sequence or a wrapper.
+class JsxValue {constructor(fields){Object.assign(this,fields);}}
 class Symbolic {constructor(kind,fields,source){this.kind=kind;this.fields=fields;this.source=source;}}
 class Unknown {constructor(reason,source,details){this.reason=reason;this.source=source;this.details=details;}}
 class Env {
@@ -30,6 +33,7 @@ function publicValue(value,seen=new Set(),depth=0){
  if(typeof value==='number')return Number.isFinite(value)?value:{kind:'number',value:String(value)};
  if(value instanceof Symbolic)return {$symbolic:{kind:value.kind,...publicValue(value.fields,seen,depth+1),source:value.source}};
  if(isUnknown(value))return {$unknown:value.reason,source:value.source,...(value.details?{details:publicValue(value.details,seen,depth+1)}:{})};
+ if(value instanceof JsxValue)return {kind:'jsx_value',source:location(value.node)};
  if(value instanceof Fn)return {kind:'function',name:value.name,source:location(value.node)};
  if(value instanceof Builtin)return {kind:'builtin',name:value.name};
  if(depth>70)return {kind:'unknown',reason:'serialization depth bound'};
@@ -165,7 +169,7 @@ class Analyzer {
   if(typeof obj==='string'||Array.isArray(obj)){if(key==='length')return obj.length;if(/^\d+$/.test(String(key)))return obj[Number(key)];return undefined;}
   if(obj===null||obj===undefined)return this.unknown('Property access on null or undefined',node);
   if(obj instanceof Fn)return this.unknown('Function object introspection is forbidden',node);
-  if(own(obj,key))return obj[key];if(own(obj,'__unknown_spread'))return this.unknown('Property may come from unknown object spread',node,{key,spread:obj.__unknown_spread});return undefined;
+  if(own(obj,key))return obj[key];if(own(obj,'__unknown_property'))return this.unknown('Property may come from unknown computed key',node,{key,computed:obj.__unknown_property});if(own(obj,'__unknown_spread'))return this.unknown('Property may come from unknown object spread',node,{key,spread:obj.__unknown_spread});return undefined;
  }
  expr(n,env,ctx){
   if(!n)return undefined;this.tick(n);
@@ -177,7 +181,7 @@ class Analyzer {
   if(ts.isArrowFunction(n)||ts.isFunctionExpression(n))return new Fn(n,env,n.name?.text);
   if(ts.isObjectLiteralExpression(n)){const o=dict();for(const p of n.properties){
    if(ts.isSpreadAssignment(p)){const v=this.expr(p.expression,env,ctx);if(isUnknown(v)){for(const key of Object.keys(o))o[key]=this.unknown('Later unknown spread may override property '+key,p,{spread:v});o.__unknown_spread=v;continue;}if(v&&typeof v==='object'&&!(v instanceof Fn)&&!(v instanceof Builtin))for(const k of Object.keys(v))if(!BAD_KEYS.has(k))o[k]=v[k];else{}continue;}
-   if(ts.isPropertyAssignment(p)){const k=this.propertyName(p.name,env,ctx);if(isUnknown(k)){o.__unknown_property=k;continue;}if(BAD_KEYS.has(String(k))){this.unknown('Forbidden object key',p);continue;}o[k]=this.expr(p.initializer,env,ctx);continue;}
+   if(ts.isPropertyAssignment(p)){const k=this.propertyName(p.name,env,ctx);if(isUnknown(k)||k instanceof Symbolic){for(const key of Object.keys(o))o[key]=this.unknown('Later unknown computed key may override property '+key,p,{key:k});o.__unknown_property=k;continue;}if(BAD_KEYS.has(String(k))){this.unknown('Forbidden object key',p);continue;}o[k]=this.expr(p.initializer,env,ctx);continue;}
    if(ts.isShorthandPropertyAssignment(p)){o[p.name.text]=this.expr(p.name,env,ctx);continue;}
    if(ts.isMethodDeclaration(p)){const k=this.propertyName(p.name,env,ctx);if(!BAD_KEYS.has(String(k)))o[k]=new Fn(p,env,String(k));continue;}
    o.__unknown_member=this.unknown('Unsupported object member',p);
@@ -195,7 +199,7 @@ class Analyzer {
   if(ts.isTypeOfExpression(n)){const v=this.expr(n.expression,env,ctx);if(isUnknown(v))return v;return v instanceof Fn||v instanceof Builtin?'function':typeof v;}
   if(ts.isVoidExpression(n)){this.diagnostic('ignored_void','void expression is not executed',n);return undefined;}
   if(ts.isCallExpression(n))return this.call(n,env,ctx);
-  if(ts.isJsxElement(n)||ts.isJsxSelfClosingElement(n)||ts.isJsxFragment(n))return this.jsx(n,env,ctx);
+  if(ts.isJsxElement(n)||ts.isJsxSelfClosingElement(n)||ts.isJsxFragment(n))return this.createJsx(n,env,ctx);
   if(ts.isJsxExpression(n))return this.expr(n.expression,env,ctx);
   return this.unknown('Unsupported expression '+ts.SyntaxKind[n.kind],n);
  }
@@ -318,6 +322,7 @@ class Analyzer {
   }
   if(name==='Object.keys'||name==='Object.values'||name==='Object.entries'){
    if(!args[0]||typeof args[0]!=='object'||isUnknown(args[0]))return this.unknown('Object enumeration requires concrete object',n);
+   if(own(args[0],'__unknown_property'))return this.unknown('Object enumeration depends on unknown computed key',n);
    if(own(args[0],'__unknown_spread'))return this.unknown('Object enumeration depends on unknown spread',n);
    const keys=Object.keys(args[0]).filter(x=>!BAD_KEYS.has(x));return name==='Object.keys'?keys:name==='Object.values'?keys.map(k=>args[0][k]):keys.map(k=>[k,args[0][k]]);
   }
@@ -326,9 +331,9 @@ class Analyzer {
    const v=args[0];let arr;if(Array.isArray(v))arr=v.slice();else if(typeof v==='string')arr=[...v];else if(v&&Number.isInteger(v.length)&&v.length>=0&&v.length<=this.maxLoop)arr=Array.from({length:v.length},()=>undefined);else return this.unknown('Array.from requires bounded concrete source',n);
    return args[1]?arr.map((x,i)=>this.invoke(args[1],[x,i],ctx,n)):arr;
   }
-  if(name==='Array.isArray')return Array.isArray(args[0]);
+  if(name==='Array.isArray')return isUnknown(args[0])?this.unknown('Array.isArray argument is unknown',n):Array.isArray(args[0]);
   if(['Number','String','Boolean','parseFloat','parseInt','Number.isFinite','Number.isInteger'].includes(name)){
-   if(args.some(isUnknown))return this.unknown('Conversion argument unknown',n);
+   if(args.some(x=>isUnknown(x)||x instanceof Symbolic))return this.unknown('Conversion argument is not concrete',n);
    if(name==='Number')return Number(args[0]);if(name==='String')return String(args[0]);if(name==='Boolean')return Boolean(args[0]);if(name==='parseFloat')return parseFloat(args[0]);if(name==='parseInt')return parseInt(args[0],args[1]);if(name==='Number.isFinite')return Number.isFinite(args[0]);return Number.isInteger(args[0]);
   }
   if(name.startsWith('remotion:Easing.'))return this.easing(name.slice('remotion:Easing.'.length),args,ctx,n);
@@ -342,7 +347,8 @@ class Analyzer {
  }
  interpolate(args,ctx,n){
   const [v,input,output,opts={}]=args;
-  if(isUnknown(v)||!Array.isArray(input)||!Array.isArray(output)||input.length<2||input.length!==output.length||[...input,...output].some(x=>typeof x!=='number'))return this.unknown('interpolate requires concrete numeric ranges',n);
+  if(!opts||isUnknown(opts)||opts instanceof Symbolic||typeof opts!=='object'||Object.values(opts).some(x=>isUnknown(x)||x instanceof Symbolic))return this.unknown('interpolate options are not concrete',n);
+  if(typeof v!=='number'||!Number.isFinite(v)||!Array.isArray(input)||!Array.isArray(output)||input.length<2||input.length!==output.length||[...input,...output].some(x=>typeof x!=='number'))return this.unknown('interpolate requires concrete numeric ranges',n);
   if(input.some((x,i)=>i>0&&x<=input[i-1]))return this.unknown('interpolate input range must increase',n);
   let x=v;if(x<input[0]){if(opts.extrapolateLeft==='clamp')x=input[0];if(opts.extrapolateLeft==='identity')return v;if(opts.extrapolateLeft==='wrap')return this.unknown('interpolate wrap not implemented',n);}
   if(x>input.at(-1)){if(opts.extrapolateRight==='clamp')x=input.at(-1);if(opts.extrapolateRight==='identity')return v;if(opts.extrapolateRight==='wrap')return this.unknown('interpolate wrap not implemented',n);}
@@ -360,27 +366,34 @@ class Analyzer {
   this.diagnostic('symbolic','spring retained symbolically; no numeric spring approximation used',n);
   return new Symbolic('spring',fields,location(n));
  }
- jsx(n,env,ctx){
-  if(ts.isJsxFragment(n))return {kind:'fragment',tag:'Fragment',attrs:{},bindings:{},children:this.jsxChildren(n.children,env,ctx),source:location(n),time:this.timeInfo(ctx)};
+ createJsx(n,env,creationCtx){
+  if(ts.isJsxFragment(n))return new JsxValue({node:n,fragment:true,childValues:this.jsxChildValues(n.children,env,creationCtx)});
   const opening=ts.isJsxElement(n)?n.openingElement:n;const tag=opening.tagName.getText();const props=dict(),bindings=dict();
   for(const a of opening.attributes.properties){
-   if(ts.isJsxSpreadAttribute(a)){const v=this.expr(a.expression,env,ctx);if(isUnknown(v)){for(const key of Object.keys(props))props[key]=this.unknown('Later unknown JSX spread may override attribute '+key,a,{spread:v});props.__unknown_spread=v;bindings.__unknown_spread={source:location(a),dependencies:this.dependencies(a.expression,env)};}else if(v&&typeof v==='object')for(const k of Object.keys(v)){if(BAD_KEYS.has(k))continue;props[k]=v[k];bindings[k]={kind:'spread_attribute',source:location(a.expression),property:k,dependencies:this.dependencies(a.expression,env)};}continue;}
-   const k=a.name.getText();if(!a.initializer)props[k]=true;else if(ts.isStringLiteral(a.initializer))props[k]=a.initializer.text;else props[k]=this.expr(a.initializer.expression,env,ctx);
+   if(ts.isJsxSpreadAttribute(a)){const v=this.expr(a.expression,env,creationCtx);if(isUnknown(v)){for(const key of Object.keys(props))props[key]=this.unknown('Later unknown JSX spread may override attribute '+key,a,{spread:v});props.__unknown_spread=v;bindings.__unknown_spread={source:location(a),dependencies:this.dependencies(a.expression,env)};}else if(v&&typeof v==='object')for(const k of Object.keys(v)){if(BAD_KEYS.has(k))continue;props[k]=v[k];bindings[k]={kind:'spread_attribute',source:location(a.expression),property:k,dependencies:this.dependencies(a.expression,env)};}continue;}
+   const k=a.name.getText();if(!a.initializer)props[k]=true;else if(ts.isStringLiteral(a.initializer))props[k]=a.initializer.text;else props[k]=this.expr(a.initializer.expression,env,creationCtx);
    bindings[k]={kind:'attribute',source:location(a.initializer||a),dependencies:this.dependencies(a.initializer||a,env)};
   }
-  const childNodes=ts.isJsxElement(n)?n.children:[];const target=/^[a-z]/.test(tag)?null:this.tagValue(opening.tagName,env,ctx);
+  const childNodes=ts.isJsxElement(n)?n.children:[];const target=/^[a-z]/.test(tag)?null:this.tagValue(opening.tagName,env,creationCtx);
   const builtinName=target instanceof Builtin?target.name:null;
+  const childValues=this.jsxChildValues(childNodes,env,creationCtx);
+  if(childNodes.length)props.children=childValues;
+  return new JsxValue({node:n,opening,tag,props,bindings,target,builtinName});
+ }
+ jsx(value,ctx){
+  const {node:n,opening,tag,props,bindings,target,builtinName}=value;
+  if(value.fragment)return {kind:'fragment',tag:'Fragment',attrs:{},bindings:{},children:this.normalizeChildren(value.childValues,n,ctx),source:location(n),time:this.timeInfo(ctx)};
   if(builtinName==='remotion:Sequence'){
    const from=props.from??0,duration=props.durationInFrames??Infinity;
    if(typeof from!=='number'||typeof duration!=='number'||!ctx)return this.unknown('Sequence timing is not concrete',n);
    const local=ctx.frame-from,active=local>=0&&local<duration;
    const childCtx={...ctx,frame:local,sequenceOffset:ctx.sequenceOffset+from};
-   return {kind:'sequence',tag,attrs:props,bindings,active,children:active?this.jsxChildren(childNodes,env,childCtx):[],source:location(n),time:this.timeInfo(childCtx)};
+   return {kind:'sequence',tag,attrs:props,bindings,active,children:active?this.normalizeChildren(props.children,n,childCtx):[],source:location(n),time:this.timeInfo(childCtx)};
   }
-  const children=this.jsxChildren(childNodes,env,ctx);if(children.length)props.children=children;
   if(target instanceof Fn){const origin={kind:'component_props',source:location(opening),bindings};const tree=this.invoke(target,[props],ctx,opening,[origin]);
    return {kind:'component',tag,definition:location(target.node),attrs:props,bindings,children:this.normalizeChildren(tree,n,ctx),source:location(n),time:this.timeInfo(ctx)};
   }
+  const children=this.normalizeChildren(props.children,n,ctx);
   if(builtinName==='react:Fragment')return{kind:'fragment',tag,attrs:props,bindings,children,source:location(n),time:this.timeInfo(ctx)};
   if(builtinName==='remotion:AbsoluteFill')props.style={position:'absolute',top:0,left:0,right:0,bottom:0,width:'100%',height:'100%',display:'flex',...(props.style||{})};
   if(target&&!(target instanceof Builtin)){this.diagnostic('unsupported','Unresolved JSX component '+tag,n);return {kind:'unknown',tag,reason:'Unresolved component',value:target,attrs:props,bindings,children,source:location(n),time:this.timeInfo(ctx)};}
@@ -392,6 +405,7 @@ class Analyzer {
  tagValue(n,env,ctx){if(ts.isIdentifier(n))return this.expr(n,env,ctx);if(ts.isPropertyAccessExpression(n))return this.expr(n,env,ctx);return this.unknown('Unsupported JSX tag expression',n);}
  timeInfo(ctx){return ctx?{global_seconds:ctx.time,global_frame:ctx.globalFrame,local_frame:ctx.frame,sequence_offset:ctx.sequenceOffset,fps:this.config.fps}:null;}
  normalizeChildren(value,node,ctx){
+  if(value instanceof JsxValue){this.tick(value.node);return this.normalizeChildren(this.jsx(value,ctx),value.node,ctx);}
   if(value===undefined||value===null||typeof value==='boolean')return[];
   if(Array.isArray(value))return value.flatMap(v=>this.normalizeChildren(v,node,ctx));
   if(typeof value==='string'||typeof value==='number')return[{kind:'text',text:String(value),source:location(node),time:this.timeInfo(ctx)}];
@@ -399,10 +413,10 @@ class Analyzer {
   if(value&&['element','component','sequence','fragment','unknown','text'].includes(value.kind))return[value];
   return[{kind:'unknown',reason:'Non-renderable abstract child',value,source:location(node),time:this.timeInfo(ctx)}];
  }
- jsxChildren(nodes,env,ctx){const out=[];for(const n of nodes){
-   if(ts.isJsxText(n)){const text=this.jsxText(n.text);if(text)out.push({kind:'text',text,source:location(n),time:this.timeInfo(ctx)});}
-   else if(ts.isJsxExpression(n)){if(n.expression)out.push(...this.normalizeChildren(this.expr(n.expression,env,ctx),n,ctx));}
-   else out.push(...this.normalizeChildren(this.expr(n,env,ctx),n,ctx));
+ jsxChildValues(nodes,env,ctx){const out=[];for(const n of nodes){
+   if(ts.isJsxText(n)){const text=this.jsxText(n.text);if(text)out.push(text);}
+   else if(ts.isJsxExpression(n)){if(n.expression)out.push(this.expr(n.expression,env,ctx));}
+   else out.push(this.expr(n,env,ctx));
   }return out;}
  jsxText(text){const lines=text.replace(/\r/g,'').split('\n');return lines.map((s,i)=>{let t=s.replace(/\t/g,' ');if(i>0)t=t.replace(/^ +/,'');if(i<lines.length-1)t=t.replace(/ +$/,'');return t;}).filter(Boolean).join(' ');}
  run(){

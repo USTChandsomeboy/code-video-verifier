@@ -55,3 +55,11 @@
 原作的 `composition` 记录入口、导出名、fps、width、height、durationInFrames、props 和 time_offset_seconds。复刻配置由 CLI 提供。两边采样时间按各自 fps 量化为帧，再减去嵌套 Sequence 的起点。
 
 `reference-data/` 保存原作观测值及生成依据；评分脚本会再次校验并解析原作。每项输出保留两边源码位置、参考值、复刻值和误差，可逐项复查。
+
+## 局部三角形与 spring 结构测量
+
+`property: triangle_vertices` 与 `metric: triangle_geometry` 比较闭合三角形的三个顶点。每边先减去包围盒左上角，再以宽度等比例归一化；误差为最佳顶点对应下的平均欧氏距离。对应允许循环起点和逆序，polygon 与绝对 M/L/H/V/Z path 可互换。同宽高比但顶点偏斜会产生误差。此项检查局部形状，不检查画布位置或绝对大小。形状到最近 svg 间存在 transform 时返回 unsupported，需添加变换链适配器。
+
+`property: spring_scale_parameters` 与 `metric: spring_parameters` 只读取目标或祖先中直接绑定到 `scale(${spring(...)})` 的符号参数。支持 mass、stiffness、damping、from、to、local_time_seconds、delay_seconds 和 duration_seconds。每项在 `parameter_scales` 指定正数尺度，误差取所有采样和所列参数的最大归一化差值；采样内明确静态的 scale（包括默认 scale=1）得 bad；动态非 spring 实现返回 unsupported，避免将行为等价实现硬扣分。未使用变量或兄弟元素上的 spring 不参与测量。纯平移 spring 不算缩放。
+
+spring 参数项属于明确声明的结构检查，不表示完整视觉曲线；其他函数生成相同曲线的实现应由专用曲线测量器判定等价。此项不应被用作通用视觉相似度。复合符号 scale 和多个祖先 spring scale 暂不支持。检查参数之外的参数应在覆盖范围中列明。
