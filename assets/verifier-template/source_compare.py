@@ -103,7 +103,7 @@ def spring_scale_parameters(n, anc):
         transform=style.get('transform','')
         if unknown(transform): raise Unsupported('unresolved scale transform')
         if isinstance(transform,str):
-            if re.search(r'\bscale(?:X|Y)?\(', transform): found.append({'kind':'static_non_spring'})
+            # Numeric scales may adapt the canvas; they are not another spring.
             continue
         if not isinstance(transform,dict): continue
         symbolic=transform.get('$symbolic',{})
@@ -115,8 +115,10 @@ def spring_scale_parameters(n, anc):
         elif any('scale' in x for x in parts if isinstance(x,str)):
             raise Unsupported('composed symbolic scale needs a dedicated adapter')
     if len(found)>1: raise Unsupported('multiple spring scales require composition support')
-    if not found:return {'kind':'non_spring','scale':prop(n,anc,'scale_binding')}
-    if found[0].get('kind')=='static_non_spring': return {'kind':'non_spring','scale':prop(n,anc,'scale_binding')}
+    if not found:
+        return {'kind':'non_spring','scale':prop(n,anc,'scale_binding')}
+    # Numeric scale ancestors are canvas adapters and do not invalidate one
+    # symbolic spring bound on the selected object.
     sp=found[0];fps=num(sp.get('fps'));cfg=sp.get('config',{})
     result={key:num(cfg.get(key)) for key in ['mass','stiffness','damping']}
     result.update({key:num(sp.get(key)) for key in ['from','to']})

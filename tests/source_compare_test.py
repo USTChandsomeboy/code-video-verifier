@@ -70,6 +70,10 @@ class SourceCompareRegression(unittest.TestCase):
   self.assertEqual(m.error([[0,ref]],[[0,rep]],check),3)
   self.assertEqual(m.prop(other,(obj,),'spring_scale_parameters'),ref)
   self.assertEqual(m.error([[0,ref]],[[0,m.prop(other,(),'spring_scale_parameters')]],check),1)
+ def test_static_scale_ancestor_does_not_conflict_with_spring(self):
+  sp={'$symbolic':{'kind':'template','parts':['scale(',{'$symbolic':{'kind':'spring','fps':30,'frame':20,'from':.85,'to':1,'durationInFrames':22,'config':{'mass':1,'stiffness':100,'damping':10}}},')']}}
+  ancestor=node('div',{'style':{'transform':'scale(.5)'}});child=node('div',{'style':{'transform':sp}})
+  self.assertEqual(m.prop(child,(ancestor,),'spring_scale_parameters')['damping'],10.0)
  def test_translate_spring_does_not_count_as_scale_parameters(self):
   transform={'$symbolic':{'kind':'template','parts':['translateY(',{'$symbolic':{'kind':'spring','frame':5}},'px)']}}
   self.assertEqual(m.prop(node('div',{'style':{'transform':transform}}),(),'spring_scale_parameters'),{'kind':'non_spring','scale':1.0})

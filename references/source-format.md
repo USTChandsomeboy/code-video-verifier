@@ -63,3 +63,5 @@
 `property: spring_scale_parameters` 与 `metric: spring_parameters` 只读取目标或祖先中直接绑定到 `scale(${spring(...)})` 的符号参数。支持 mass、stiffness、damping、from、to、local_time_seconds、delay_seconds 和 duration_seconds。每项在 `parameter_scales` 指定正数尺度，误差取所有采样和所列参数的最大归一化差值；采样内明确静态的 scale（包括默认 scale=1）得 bad；动态非 spring 实现返回 unsupported，避免将行为等价实现硬扣分。未使用变量或兄弟元素上的 spring 不参与测量。纯平移 spring 不算缩放。
 
 spring 参数项属于明确声明的结构检查，不表示完整视觉曲线；其他函数生成相同曲线的实现应由专用曲线测量器判定等价。此项不应被用作通用视觉相似度。复合符号 scale 和多个祖先 spring scale 暂不支持。检查参数之外的参数应在覆盖范围中列明。
+
+当目标存在一个明确的 spring scale 时，外层数值 scale 可作为画布适配，不记为第二个 spring，也不改变结构参数得分。该结构项只检查 spring 本身，静态缩放造成的绝对尺寸差异需由布局/几何项另行评价。仅多个符号 spring scale 仍返回 unsupported。
